@@ -23,15 +23,18 @@ async def get_youtube_audio(query: str):
 
     # Define yt-dlp options
     ydl_opts = {
-        'format': 'bestaudio/best',  # Best audio format
-        'quiet': True,                # Suppress output to avoid clutter
-        'default_search': 'ytsearch', # Default search engine is YouTube
-        'extract_flat': 'in_playlist', # Only extract metadata (no download)
-        'force_generic_extractor': True,  # Force the use of the generic extractor
-        'cookiefile': 'cookies/cookies.txt',  # Path to cookies.txt
-        'geo_bypass': True,          # Allow bypassing geo-restrictions
-        'nocheckcertificate': True,  # Ignore certificate verification errors
+        'format': 'bestaudio/best',          # Best available audio quality
+        'extractaudio': True,                # Extract audio only (no video)
+        'audioformat': 'mp3',                # Output audio format (mp3)
+        'outtmpl': f'{TEMP_AUDIO_DIR}/%(title)s-%(id)s.%(ext)s',  # Template for saved file path
+        'nocheckcertificate': True,          # Ignore SSL certificate errors
+        'ignoreerrors': False,               # Don't ignore errors
+        'quiet': True,                       # Suppress output to avoid clutter
+        'no_warnings': True,                 # Suppress warnings
+        'default_search': 'auto',            # Default search engine for the query
+        'cookiefile': 'cookies/cookies.txt', # Path to cookies file for authentication
     }
+
 
     # Define a function to run the yt-dlp extraction process
     def extract():
