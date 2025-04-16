@@ -66,7 +66,7 @@ async def play(chat_id, song):
         stream_url = song['url']
         
         # Start the stream immediately (avoid waiting for full download)
-        media_stream = MediaStream(stream_url, quality=AudioQuality.HIGH)
+        media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.STUDIO)
 
         await call.play(
             chat_id,
