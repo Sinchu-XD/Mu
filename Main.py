@@ -7,6 +7,7 @@ from pytgcalls.types import MediaStream
 from pytgcalls.types import AudioQuality
 from yt_dlp import YoutubeDL
 from random import shuffle
+from collections import deque
 import time
 
 API_ID = 6067591
@@ -19,46 +20,45 @@ assistant = Client("Assistant", api_id=API_ID, api_hash=API_HASH, session_string
 call = PyTgCalls(assistant)
 
 queues = {}
+cache = {}
+fetch_lock = asyncio.Semaphore(3)
 
 TEMP_AUDIO_DIR = "temp_audio"
 if not os.path.exists(TEMP_AUDIO_DIR):
     os.makedirs(TEMP_AUDIO_DIR)
 
-async def get_youtube_audio(query: str):
-    loop = asyncio.get_event_loop()
+YDL_OPTS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'no_warnings': True,
+    'nocheckcertificate': True,
+    'source_address': '0.0.0.0',
+    'default_search': 'ytsearch',
+    'cookiefile': "cookies/cookies.txt",
+}
 
-    # Define yt-dlp options
-    ydl_opts = {
-        'format': 'bestaudio/best',          # Best available audio quality
-        'extractaudio': True,                # Extract audio only (no video)
-        'audioformat': 'mp3',                # Output audio format (mp3)
-        'outtmpl': f'{TEMP_AUDIO_DIR}/%(id)s.%(ext)s',  # Template for saved file path
-        'nocheckcertificate': True,          # Ignore SSL certificate errors
-        'ignoreerrors': True,               # Don't stop on errors
-        'quiet': True,                       # Suppress output to avoid clutter
-        'no_warnings': True,                 # Suppress warnings
-        'default_search': 'auto',            # Default search engine for the query
-        'cookiefile': 'cookies/cookies.txt', # Path to cookies file for authentication
-    }
 
-    # Define a function to run the yt-dlp extraction process
-    def extract():
-        with YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(query, download=False)
+async def get_audio_stream(query: str):
+    if query in cache:
+        return cache[query]
 
-    # Run the extraction function asynchronously
-    info = await loop.run_in_executor(None, extract)
+    async with fetch_lock:
+        loop = asyncio.get_event_loop()
 
-    # Check if the result contains entries (in case of a playlist search)
-    if 'entries' in info:
-        info = info['entries'][0]
+        def fetch():
+            with YoutubeDL(YDL_OPTS) as ydl:
+                info = ydl.extract_info(query, download=False)
+                if 'entries' in info:
+                    info = info['entries'][0]
+                return {
+                    'title': info.get('title'),
+                    'url': info.get('url'),
+                    'webpage_url': info.get('webpage_url')
+                }
 
-    # Return the relevant information
-    return {
-        'title': info.get('title'),
-        'url': info.get('url'),
-        'webpage_url': info.get('webpage_url'),
-    }
+        song_info = await loop.run_in_executor(None, fetch)
+        cache[query] = song_info
+        return song_info
 
 # Optimized play function
 async def play(chat_id, song):
@@ -80,42 +80,51 @@ async def play(chat_id, song):
 @bot.on_message(filters.command("play") & filters.group)
 async def play_command(_, message: Message):
     chat_id = message.chat.id
-    if len(message.command) < 2:
-        return await message.reply("❌ Please provide a song name or YouTube link.")
-    
-    query = message.text.split(None, 1)[1]
-    song = await get_youtube_audio(query)
+    query = message.text.split(None, 1)[1] if len(message.command) > 1 else None
+
+    if not query:
+        return await message.reply("❌ Send a song name or YouTube URL.")
+
+    msg = await message.reply("🔍 Searching...")
+
+    song = await get_audio_stream(query)
 
     if chat_id not in queues:
-        queues[chat_id] = []
+        queues[chat_id] = deque()
 
     queues[chat_id].append(song)
 
     if len(queues[chat_id]) == 1:
-        success, error_message = await play(chat_id, song)
+        success, error = await play(chat_id, song)
         if success:
-            await message.reply(f"▶️ Now playing: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
+            await msg.edit_text(f"🎶 Playing: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
         else:
-            await message.reply(error_message)
+            await msg.edit_text(error)
     else:
-        await message.reply(f"📥 Added to queue: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
+        await msg.edit_text(f"📥 Queued: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
 
-# Skip command with queue optimization
+
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_command(_, message: Message):
     chat_id = message.chat.id
+
     if chat_id not in queues or not queues[chat_id]:
-        return await message.reply("❌ Nothing in queue to skip.")
-    
-    skipped = queues[chat_id].pop(0)
+        return await message.reply("❌ Queue is empty.")
+
+    queues[chat_id].popleft()
+
     if queues[chat_id]:
         next_song = queues[chat_id][0]
-        await play(chat_id, next_song)
-        await message.reply(f"⏭ Skipped. Now playing: [{next_song['title']}]({next_song['webpage_url']})", disable_web_page_preview=True)
+        success, error = await play(chat_id, next_song)
+        if success:
+            await message.reply(f"⏭ Now playing: [{next_song['title']}]({next_song['webpage_url']})", disable_web_page_preview=True)
+        else:
+            await message.reply(error)
     else:
+        # Don't leave VC, just stop playback
         await call.leave_call(chat_id)
-        queues.pop(chat_id, None)
-        await message.reply("⏹ Queue empty. Stopped playback.")
+        await message.reply("✅ Playback stopped.")
+        queues.pop(chat_id)
 
 # Main bot loop
 async def main():
