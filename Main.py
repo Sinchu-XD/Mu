@@ -44,11 +44,27 @@ async def get_youtube_audio(query: str):
     }
 
 
+async def play(chat_id, audio_file):
+    try:
+        await call.play(
+            chat_id,
+            MediaStream(
+                media_path=audio_file,   
+                audio_parameters=AudioQuality.STUDIO,
+                video_flags=MediaStream.Flags.IGNORE,
+            ),
+        )
+        return True, None
+    except Exception as e:
+        return False, f"Error: <code>{e}</code>"
+
+
 @bot.on_message(filters.command("play") & filters.group)
 async def play_command(_, message: Message):
     chat_id = message.chat.id
     if len(message.command) < 2:
         return await message.reply("❌ Please provide a song name or YouTube link.")
+    
     query = message.text.split(None, 1)[1]
     song = await get_youtube_audio(query)
 
@@ -58,9 +74,11 @@ async def play_command(_, message: Message):
     queues[chat_id].append(song)
 
     if len(queues[chat_id]) == 1:
-        media_stream = MediaStream(song['url'], quality=AudioQuality.HIGH)
-        await call.play(chat_id, media_stream)
-        await message.reply(f"▶️ Now playing: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
+        success, error_message = await play(chat_id, song['url'])
+        if success:
+            await message.reply(f"▶️ Now playing: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
+        else:
+            await message.reply(error_message)
     else:
         await message.reply(f"📥 Added to queue: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
 
