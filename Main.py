@@ -38,32 +38,34 @@ YDL_OPTS = {
 }
 
 
-async def get_audio_stream(query: str):
-    if query in cache:
-        return cache[query]
+cached_urls = {}
 
-    async with fetch_lock:
-        loop = asyncio.get_event_loop()
+# Function to get the media stream URL using yt-dlp
+async def get_media_stream_url(query: str):
+    # Check cache to avoid re-fetching URLs
+    if query in cached_urls:
+        return cached_urls[query]
 
-        def fetch():
-            with YoutubeDL(YDL_OPTS) as ydl:
-                info = ydl.extract_info(query, download=False)
-                if 'entries' in info:
-                    info = info['entries'][0]
-                return {
-                    'title': info.get('title'),
-                    'url': info.get('url'),
-                    'webpage_url': info.get('webpage_url')
-                }
+    loop = asyncio.get_event_loop()
 
-        song_info = await loop.run_in_executor(None, fetch)
-        cache[query] = song_info
-        return song_info
+    def fetch_url():
+        with YoutubeDL(YDL_OPTS) as ydl:
+            info = ydl.extract_info(query, download=False)
+            if 'entries' in info:
+                info = info['entries'][0]
+            return info['url']
+
+    url = await loop.run_in_executor(None, fetch_url)
+
+    # Cache the URL for later use
+    cached_urls[query] = url
+
+    return url
 
 # Optimized play function
 async def play(chat_id, song):
     try:
-        stream_url = song['url']
+        stream_url = await get_media_stream_url(query)
         
         # Start the stream immediately (avoid waiting for full download)
         media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.STUDIO)
@@ -87,21 +89,24 @@ async def play_command(_, message: Message):
 
     msg = await message.reply("🔍 Searching...")
 
-    song = await get_audio_stream(query)
+    # Check if we're already streaming the song
+    if chat_id in queues and query in queues[chat_id]:
+        return await msg.edit_text(f"🎶 Already in the queue: {query}")
 
+    # Add song to the queue
     if chat_id not in queues:
         queues[chat_id] = deque()
+    
+    queues[chat_id].append(query)
 
-    queues[chat_id].append(song)
+    # Stream the song
+    success, error = await play(chat_id, query)
 
-    if len(queues[chat_id]) == 1:
-        success, error = await play(chat_id, song)
-        if success:
-            await msg.edit_text(f"🎶 Playing: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
-        else:
-            await msg.edit_text(error)
+    if success:
+        await msg.edit_text(f"🎶 Now Playing: {query}")
     else:
-        await msg.edit_text(f"📥 Queued: [{song['title']}]({song['webpage_url']})", disable_web_page_preview=True)
+        await msg.edit_text(error)
+
 
 
 @bot.on_message(filters.command("skip") & filters.group)
