@@ -26,7 +26,7 @@ async def get_youtube_audio(query: str):
         'default_search': 'ytsearch',
         'extract_flat': 'in_playlist',
         'forceurl': True,
-        'cookiefile': 'cookies.txt',
+        'cookiefile': 'cookies/cookies.txt',
     }
 
     def extract():
