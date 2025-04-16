@@ -1,3 +1,4 @@
+import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
@@ -18,6 +19,10 @@ call = PyTgCalls(assistant)
 
 queues = {}
 
+TEMP_AUDIO_DIR = "temp_audio"
+if not os.path.exists(TEMP_AUDIO_DIR):
+    os.makedirs(TEMP_AUDIO_DIR)
+    
 async def get_youtube_audio(query: str):
     loop = asyncio.get_event_loop()
 
