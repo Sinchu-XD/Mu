@@ -160,7 +160,7 @@ async def remove_from_queue(_, message: Message):
         await message.reply("❌ Invalid index or error removing.")
 
 
-async def start_bot():
+async def main():
     await bot.start()
     await assistant.start()
     await call.start()
@@ -169,5 +169,10 @@ async def start_bot():
 
 
 if __name__ == "__main__":
-    asyncio.run(start_bot())
-  
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        LOGGER.info("Bot stopped manually.")
+    except Exception as e:
+        LOGGER.error(f"An unexpected error occurred in main: {e}")
