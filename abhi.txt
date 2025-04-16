@@ -1,5 +1,5 @@
 pyrofork
-pytgcalls==2.1.1
+py-tgcalls==2.1.1
 yt-dlp==2025.3.31
 aiohttp==3.8.3
 asyncio==3.4.3
