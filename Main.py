@@ -63,7 +63,7 @@ async def get_media_stream_url(query: str):
     return url
 
 # Optimized play function
-async def play(chat_id, song):
+async def play(chat_id, query):
     try:
         stream_url = await get_media_stream_url(query)
         
