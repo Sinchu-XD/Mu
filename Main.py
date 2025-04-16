@@ -20,23 +20,32 @@ queues = {}
 
 async def get_youtube_audio(query: str):
     loop = asyncio.get_event_loop()
+
+    # Define yt-dlp options
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-        'default_search': 'ytsearch',
-        'extract_flat': 'in_playlist',
-        'forceurl': True,
-        'cookiefile': 'cookies/cookies.txt',
+        'format': 'bestaudio/best',  # Best audio format
+        'quiet': True,                # Suppress output to avoid clutter
+        'default_search': 'ytsearch', # Default search engine is YouTube
+        'extract_flat': 'in_playlist', # Only extract metadata (no download)
+        'force_generic_extractor': True,  # Force the use of the generic extractor
+        'cookiefile': 'cookies/cookies.txt',  # Path to cookies.txt
+        'geo_bypass': True,          # Allow bypassing geo-restrictions
+        'nocheckcertificate': True,  # Ignore certificate verification errors
     }
 
+    # Define a function to run the yt-dlp extraction process
     def extract():
         with YoutubeDL(ydl_opts) as ydl:
             return ydl.extract_info(query, download=False)
 
+    # Run the extraction function asynchronously
     info = await loop.run_in_executor(None, extract)
 
+    # Check if the result contains entries (in case of a playlist search)
     if 'entries' in info:
         info = info['entries'][0]
+
+    # Return the relevant information
     return {
         'title': info.get('title'),
         'url': info.get('url'),
