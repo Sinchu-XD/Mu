@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 from pyrogram import Client, filters
+from pyrogram.types import Message
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
