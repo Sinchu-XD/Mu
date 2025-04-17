@@ -68,9 +68,6 @@ async def play_handler(_, message):
 
     try:
         # Check if the assistant (bot) is in a VC before playing a song
-        if not await call.is_connected(chat_id):
-            return await msg.edit("❌ I'm not in a voice chat. Please start a VC first.")
-
         song_info = await get_audio_url(query)
         if not song_info:
             return await msg.edit("❌ No results found.")
