@@ -87,7 +87,7 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
         
 from pytgcalls import filters
-@call.on_update(pytgcalls.filters.stream_end())
+@call.on_update(filters.stream_end())
 async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
