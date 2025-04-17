@@ -81,9 +81,6 @@ async def play_song(chat_id: int, query: str):
         media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
         await call.play(chat_id, media_stream)
 
-        # Add song to the queue
-        queues.setdefault(chat_id, deque()).append(query)
-
     except Exception as e:
         # If any error occurs, log it
         print(f"Error: {str(e)}")
