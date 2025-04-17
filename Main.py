@@ -72,7 +72,7 @@ async def play(app: Client, call: PyTgCalls, chat_id: int, query: str):
 
 
 @bot.on_message(filters.command("play") & filters.group)
-sync def play_handler(_, m):
+async def play_handler(_, m):
     chat_id = m.chat.id
     query = " ".join(m.command[1:])
     if not query:
