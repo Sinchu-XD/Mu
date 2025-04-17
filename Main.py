@@ -86,7 +86,7 @@ async def play_handler(_, m):
     queues[chat_id].append(query)
 
     if len(queues[chat_id]) == 1:
-        await play(app, call, chat_id, query)
+        await play(bot, call, chat_id, query)
         await msg.edit(f"🎧 Now playing: **{query}**")
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
@@ -98,7 +98,7 @@ async def skip_handler(_, m):
         queues[chat_id].popleft()
         if queues[chat_id]:
             next_song = queues[chat_id][0]
-            await play(app, call, chat_id, next_song)
+            await play(bot, call, chat_id, next_song)
             await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
         else:
             await call.leave_call(chat_id)
