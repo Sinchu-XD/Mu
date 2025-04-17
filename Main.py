@@ -79,11 +79,11 @@ async def get_stream_url(query: str):
         "video_url": url,
     }
 
-async def play(bot: Client, call: PyTgCalls, chat_id: int, message, query: str):
+async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
         queues[chat_id] = deque()
         caption = f"🎵 <b>{song['title']}</b>\n👤 <i>{song['artists']}</i>\n🕒 <code>{song['duration']}</code>\n🔗 <a href='{song['video_url']}'>YouTube</a>"
-    await message.reply_photo(
+    await bot.reply_photo(
         photo=song["thumbnail"],
         caption=caption,
         parse_mode="html"
