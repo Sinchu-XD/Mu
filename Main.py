@@ -91,7 +91,7 @@ async def play_handler(_, m):
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
-@app.on_message(filters.command("skip") & filters.group)
+@bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m):
     chat_id = m.chat.id
     if chat_id in queues and queues[chat_id]:
@@ -106,7 +106,7 @@ async def skip_handler(_, m):
     else:
         await m.reply("❌ No song in queue.")
 
-@app.on_message(filters.command("queue") & filters.group)
+@bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m):
     chat_id = m.chat.id
     if chat_id in queues and queues[chat_id]:
