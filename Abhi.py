@@ -1,8 +1,7 @@
 import asyncio
 from pyrogram import Client
 from pytgcalls import PyTgCalls
-from pytgcalls.types.input_stream import MediaStream
-from pytgcalls.types.input_stream.quality import AudioQuality
+from pytgcalls.types import MediaStream, AudioQuality
 from ytmusicapi import YTMusic
 from yt_dlp import YoutubeDL
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
