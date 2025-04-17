@@ -56,73 +56,67 @@ async def get_stream_url(query: str):
     return url
 
 
-async def play(chat_id, query):
-    try:
-        stream_url = await get_media_stream_url(query)
-        
-        # Start the stream immediately (avoid waiting for full download)
-        media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.STUDIO)
-
-        await call.play(
-            chat_id,
-            media_stream
-        )
-
-        return True, None
-    except Exception as e:
-        return False, f"Error: <code>{e}</code>"
-
-@bot.on_message(filters.command("play") & filters.group)
-async def play_command(_, message: Message):
-    chat_id = message.chat.id
-    query = message.text.split(None, 1)[1] if len(message.command) > 1 else None
-
-    if not query:
-        return await message.reply("❌ Send a song name or YouTube URL.")
-
-    msg = await message.reply("🔍 Searching...")
-
-    # Check if we're already streaming the song
-    if chat_id in queues and query in queues[chat_id]:
-        return await msg.edit_text(f"🎶 Already in the queue: {query}")
-
-    # Add song to the queue
+async def play(app: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
         queues[chat_id] = deque()
-    
+
+    stream_url = await get_stream_url(query)
+    media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
+
+    await call.play(
+        chat_id,
+        media_stream
+        )
+
+    return True, None
+except Exception as e:
+    return False, f"Error: <code>{e}</code>"
+
+@bot.on_message(filters.command("play") & filters.group)
+sync def play_handler(_, m):
+    chat_id = m.chat.id
+    query = " ".join(m.command[1:])
+    if not query:
+        return await m.reply("⚠️ Please provide a song name or URL.")
+
+    msg = await m.reply("🔍 Fetching...")
+
+    if chat_id not in queues:
+        queues[chat_id] = deque()
+
     queues[chat_id].append(query)
 
-    # Stream the song
-    success, error = await play(chat_id, query)
-
-    if success:
-        await msg.edit_text(f"🎶 Now Playing: {query}")
+    if len(queues[chat_id]) == 1:
+        await play(app, call, chat_id, query)
+        await msg.edit(f"🎧 Now playing: **{query}**")
     else:
-        await msg.edit_text(error)
+        await msg.edit(f"✅ Added to queue: **{query}**")
 
-
-
-@bot.on_message(filters.command("skip") & filters.group)
-async def skip_command(_, message: Message):
-    chat_id = message.chat.id
-
-    if chat_id not in queues or not queues[chat_id]:
-        return await message.reply("❌ Queue is empty.")
-
-    queues[chat_id].popleft()
-
-    if queues[chat_id]:
-        next_song = queues[chat_id][0]
-        success, error = await play(chat_id, next_song)
-        if success:
-            await message.reply(f"⏭ Now playing: [{next_song['title']}]({next_song['webpage_url']})", disable_web_page_preview=True)
+@app.on_message(filters.command("skip") & filters.group)
+async def skip_handler(_, m):
+    chat_id = m.chat.id
+    if chat_id in queues and queues[chat_id]:
+        queues[chat_id].popleft()
+        if queues[chat_id]:
+            next_song = queues[chat_id][0]
+            await play(app, call, chat_id, next_song)
+            await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
         else:
-            await message.reply(error)
+            await call.leave_call(chat_id)
+            await m.reply("✅ Queue ended. Left VC.")
     else:
-        # Don't leave VC, just stop playback
-        await call.leave_call(chat_id)
-        await message.reply("✅ Playback stopped.")
-        queues.pop(chat_id)
+        await m.reply("❌ No song in queue.")
+
+@app.on_message(filters.command("queue") & filters.group)
+async def queue_handler(_, m):
+    chat_id = m.chat.id
+    if chat_id in queues and queues[chat_id]:
+        text = "**🎶 Current Queue:**\n"
+        for i, q in enumerate(queues[chat_id], 1):
+            text += f"{i}. {q}\n"
+        await m.reply(text)
+    else:
+        await m.reply("📭 Queue is empty.")
 
 # Main bot loop
 async def main():
