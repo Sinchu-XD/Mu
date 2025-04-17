@@ -94,8 +94,7 @@ async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     await bot.send_photo(
         chat_id=chat_id,
         photo=song_info["thumbnail"],
-        caption=caption,
-        parse_mode="HTML"
+        caption=caption
     )
 
     # Play the song in the voice chat
