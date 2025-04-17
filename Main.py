@@ -6,6 +6,7 @@ from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream
 from pytgcalls.types import AudioQuality
 from yt_dlp import YoutubeDL
+from ytmusicapi import YTMusic
 from random import shuffle
 from collections import deque
 import time
@@ -23,19 +24,13 @@ queues = {}
 cache = {}
 fetch_lock = asyncio.Semaphore(3)
 
-TEMP_AUDIO_DIR = "temp_audio"
-if not os.path.exists(TEMP_AUDIO_DIR):
-    os.makedirs(TEMP_AUDIO_DIR)
-
-
-
 YDL_OPTS = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
     "quiet": True,
     "no_warnings": True,
     "nocheckcertificate": True,
-    "source_address": "0.0.0.0",
     "default_search": "ytsearch",
+    "source_address": "0.0.0.0",
     "forceipv4": True,
     "cachedir": False,
     "cookiefile": "cookies/cookies.txt",
@@ -47,23 +42,29 @@ async def get_stream_url(query: str):
     if query in cached_urls:
         return cached_urls[query]
 
-    if not query.startswith("http"):
-        query = f"ytsearch1:{query}"
+    # Step 1: FAST search using ytmusicapi
+    search_results = ytmusic.search(query, filter="songs")
+    if not search_results:
+        raise Exception("Song not found!")
 
+    video_id = search_results[0].get("videoId")
+    if not video_id:
+        raise Exception("Invalid video ID!")
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    # Step 2: Use yt-dlp to extract direct audio stream
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(
-        None, lambda: YoutubeDL(YDL_OPTS).extract_info(query, download=False)
+        None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False)
     )
 
-    # ✅ Check if search result has entries (ytsearch returns a playlist)
-    if "entries" in data:
-        data = data["entries"][0]
+    stream_url = data.get("url")
+    if not stream_url:
+        raise Exception("No stream URL found!")
 
-    url = data["url"]
-    cached_urls[query] = url
-    return url
-
-
+    cached_urls[query] = stream_url
+    return stream_url
 
 async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
