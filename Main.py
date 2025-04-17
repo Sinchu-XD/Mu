@@ -139,6 +139,7 @@ async def skip_handler(_, m: Message):
     if chat_id in queues and queues[chat_id]:
         # If there's only one song left in the queue
         if len(queues[chat_id]) == 1:
+            queues[chat_id].clear()  # Clear the queue if only one song was left
             await call.leave_call(chat_id)
             await m.reply("✅ Queue ended. Left VC.")
         else:
@@ -151,6 +152,8 @@ async def skip_handler(_, m: Message):
                 await play_song(chat_id, next_song)
                 await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
             else:
+                # If the queue is empty, clear the queue and leave the VC
+                queues[chat_id].clear()
                 await call.leave_call(chat_id)
                 await m.reply("✅ Queue is empty. Left VC.")
     else:
