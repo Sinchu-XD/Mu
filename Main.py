@@ -23,6 +23,8 @@ call = PyTgCalls(assistant)
 queues = {}
 cache = {}
 fetch_lock = asyncio.Semaphore(3)
+ytmusic = YTMusic()
+
 
 YDL_OPTS = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
