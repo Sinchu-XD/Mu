@@ -7,19 +7,27 @@ from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic
 
+# Define your API keys and tokens
 API_ID = 6067591
 API_HASH = "94e17044c2393f43fda31d3afe77b26b"
 BOT_TOKEN = "7913409153:AAEvv86Q96KqjU6-fvj_JOBKp4_MHH9H4Wk"
 SESSION_STRING = "BQBclYcAfwPhsOaYEN9rZiJTeqV1e-mW90J3pxU5lU-HRDBDir4n236Uy6xowZLnSJ83DDyV-7m8NommEpFKXVZMwRR41bXxvE8JzhIcLIJnCP5yObgE3yRkljsE36qEsdVYTgggdMSHrhoFWZG5YuOIJ0hi1HpqzOJhocARqoVbys1-CNSjTAEXdNB3knhatAqkHVnHfWcgvtshc3iiru3Gjpl9lXaPnLL5p5GP11dL8vRS4Dob-8nZW2vEkXqsD4-Ce6BAD8m4RIqTsomtrQCgaH4ugYfpFuKVr_oz04hUTjB4MzXK-Wr_Fz5Lk42PnrE3wWEwhsfgOVu8AM02YlKLV77MegAAAAHKUdR6AA"
 
+# Initialize the bot, assistant client, and call handler
 bot = Client("MusicBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 assistant = Client("Assistant", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 call = PyTgCalls(assistant)
 
+# Queue to hold songs
 queues = {}
+
+# Cache to store song URLs
 cached_urls = {}
+
+# YTMusic API instance
 ytmusic = YTMusic()
 
+# YouTubeDL options for extracting stream URLs
 YDL_OPTS = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
     "quiet": True,
@@ -32,10 +40,12 @@ YDL_OPTS = {
     "cookiefile": "cookies/cookies.txt",
 }
 
+# Function to get stream URL for a song based on the query
 async def get_stream_url(query: str):
     if query in cached_urls:
         return cached_urls[query]
 
+    # Perform the search for the song using YTMusic API
     search_results = ytmusic.search(query, filter="songs")
     if not search_results:
         raise Exception("Song not found!")
@@ -48,30 +58,47 @@ async def get_stream_url(query: str):
     url = f"https://www.youtube.com/watch?v={video_id}"
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False))
-    stream_url = data.get("url")
-    if not stream_url:
+
+    # Ensure that the extracted data contains the stream URL
+    if isinstance(data, dict) and "url" in data:
+        stream_url = data.get("url")
+        cached_urls[query] = stream_url
+        return {
+            "stream_url": stream_url,
+            "title": result.get("title"),
+            "duration": result.get("duration"),
+            "artists": ", ".join([a["name"] for a in result.get("artists", [])]),
+            "thumbnail": result["thumbnails"][-1]["url"],
+            "video_url": url,
+        }
+    else:
         raise Exception("No stream URL found!")
 
-    cached_urls[query] = stream_url
-    return {
-        "stream_url": stream_url,
-        "title": result.get("title"),
-        "duration": result.get("duration"),
-        "artists": ", ".join([a["name"] for a in result.get("artists", [])]),
-        "thumbnail": result["thumbnails"][-1]["url"],
-        "video_url": url,
-    }
-
+# Function to play a song
 async def play_song(bot: Client, chat_id: int, query: str):
-    song_info = await get_stream_url(query)
-    caption = f"🎵 <b>{song_info['title']}</b>\n👤 <i>{song_info['artists']}</i>\n🕒 <code>{song_info['duration']}</code>\n🔗 <a href='{song_info['video_url']}'>YouTube</a>"
+    try:
+        song_info = await get_stream_url(query)
 
-    await bot.send_photo(chat_id=chat_id, photo=song_info["thumbnail"], caption=caption)
-    media_stream = MediaStream(song_info['stream_url'], audio_parameters=AudioQuality.HIGH)
-    await call.play(chat_id, media_stream)
+        # Ensure song_info is a dictionary before proceeding
+        if isinstance(song_info, dict):
+            caption = f"🎵 <b>{song_info['title']}</b>\n👤 <i>{song_info['artists']}</i>\n🕒 <code>{song_info['duration']}</code>\n🔗 <a href='{song_info['video_url']}'>YouTube</a>"
 
-    queues.setdefault(chat_id, deque()).append(query)
+            # Send song thumbnail and caption
+            await bot.send_photo(chat_id=chat_id, photo=song_info["thumbnail"], caption=caption)
 
+            # Create media stream and play the song
+            media_stream = MediaStream(song_info['stream_url'], audio_parameters=AudioQuality.HIGH)
+            await call.play(chat_id, media_stream)
+
+            # Add song to the queue
+            queues.setdefault(chat_id, deque()).append(query)
+        else:
+            raise Exception("Error: get_stream_url did not return valid data.")
+    except Exception as e:
+        # If any error occurs, send a message to the chat
+        await bot.send_message(chat_id, f"❌ Error: {str(e)}")
+
+# Function to handle the queue end event (when the song finishes)
 async def handle_queue_end(client: PyTgCalls, update: Update):
     chat_id = update.chat_id
     if chat_id in queues:
@@ -87,12 +114,12 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
         
-from pytgcalls import filters
+# Listen to stream end event from pytgcalls
 @call.on_update(filters.stream_end())
 async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
-from pyrogram import filters
+# Command to play a song
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
@@ -110,8 +137,7 @@ async def play_handler(_, m: Message):
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
-
-from pyrogram import filters
+# Command to skip a song
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
@@ -127,7 +153,7 @@ async def skip_handler(_, m: Message):
     else:
         await m.reply("❌ No song in queue.")
 
-from pyrogram import filters
+# Command to show the queue
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m: Message):
     chat_id = m.chat.id
@@ -137,6 +163,7 @@ async def queue_handler(_, m: Message):
     else:
         await m.reply("📭 Queue is empty.")
 
+# Main function to start the bot
 async def main():
     await bot.start()
     await assistant.start()
@@ -144,9 +171,11 @@ async def main():
     print("✅ Music bot running.")
     await asyncio.get_event_loop().create_future()
 
+# Start the bot
 if __name__ == "__main__":
     try:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         print("Bot stopped manually.")
+        
