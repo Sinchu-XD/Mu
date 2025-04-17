@@ -3,7 +3,7 @@ import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls
-from pytgcalls.types import MediaStream
+from pytgcalls.types import MediaStream, Update
 from pytgcalls.types import AudioQuality
 from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic
@@ -98,6 +98,32 @@ async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
         )
 
     return True, None
+
+@call.on_update(filters.stream_end())
+async def handler(client: PyTgCalls, update: Update):
+    chat_id = update.chat_id
+    # Check if there's a queue for the current chat
+    if chat_id in queues:
+        # Remove the song that has ended from the queue
+        queues[chat_id].popleft()
+        
+        # If there are still songs in the queue, play the next one
+        if queues[chat_id]:
+            next_song = queues[chat_id][0]
+            stream_url = await get_stream_url(next_song)
+            media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
+
+            # Play the next song
+            await call.play(chat_id, media_stream)
+            await client.send_message(chat_id, f"⏭️ Skipped to the next song: **{next_song}**")
+        else:
+            # If there are no songs left in the queue, leave the voice chat
+            await call.leave_call(chat_id)
+            await client.send_message(chat_id, "✅ Queue ended. Left VC.")
+    else:
+        # If no queue exists for the current chat, leave the voice chat
+        await call.leave_call(chat_id)
+        await client.send_message(chat_id, "✅ Queue ended. Left VC.")
 
 
 @bot.on_message(filters.command("play") & filters.group)
