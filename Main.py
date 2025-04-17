@@ -95,7 +95,7 @@ async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
         chat_id=chat_id,
         photo=song_info["thumbnail"],
         caption=caption,
-        parse_mode="html"
+        parse_mode="HTML"
     )
 
     # Play the song in the voice chat
