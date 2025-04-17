@@ -56,7 +56,7 @@ async def get_stream_url(query: str):
     return url
 
 
-async def play(app: Client, call: PyTgCalls, chat_id: int, query: str):
+async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
         queues[chat_id] = deque()
 
