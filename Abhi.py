@@ -1,6 +1,6 @@
 import asyncio
 from pyrogram import Client, filters
-from pytgcalls import PyTgCalls
+from pytgcalls import PyTgCalls, idle
 from pytgcalls.types import MediaStream, AudioQuality
 from ytmusicapi import YTMusic
 from yt_dlp import YoutubeDL
