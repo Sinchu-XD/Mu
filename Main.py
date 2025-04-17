@@ -98,7 +98,8 @@ async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
         )
 
     return True, None
-
+    
+from pytgcalls import filters
 @call.on_update(filters.stream_end())
 async def handler(client: PyTgCalls, update: Update):
     chat_id = update.chat_id
