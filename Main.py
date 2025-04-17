@@ -80,24 +80,31 @@ async def get_stream_url(query: str):
     }
 
 async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
+    # This function assumes that `query` is the name or URL of the song you want to play
     if chat_id not in queues:
         queues[chat_id] = deque()
-        caption = f"🎵 <b>{song['title']}</b>\n👤 <i>{song['artists']}</i>\n🕒 <code>{song['duration']}</code>\n🔗 <a href='{song['video_url']}'>YouTube</a>"
+
+    # Get the stream URL for the song
+    song_info = await get_stream_url(query)
+
+    # Construct the song details message
+    caption = f"🎵 <b>{song_info['title']}</b>\n👤 <i>{song_info['artists']}</i>\n🕒 <code>{song_info['duration']}</code>\n🔗 <a href='{song_info['video_url']}'>YouTube</a>"
+
+    # Send song details as a photo with the caption
     await bot.send_photo(
-        photo=song["thumbnail"],
+        chat_id=chat_id,
+        photo=song_info["thumbnail"],
         caption=caption,
         parse_mode="html"
     )
 
-    stream_url = await get_stream_url(query)
-    media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
+    # Play the song in the voice chat
+    media_stream = MediaStream(song_info['stream_url'], audio_parameters=AudioQuality.HIGH)
+    await call.play(chat_id, media_stream)
 
-    await call.play(
-        chat_id,
-        media_stream
-        )
-
-    return True, None
+    # Add song to the queue and return
+    queues[chat_id].append(query)
+    return True
     
 from pytgcalls import filters
 @call.on_update(filters.stream_end())
@@ -128,24 +135,29 @@ async def handler(client: PyTgCalls, update: Update):
 
 from pyrogram import filters
 @bot.on_message(filters.command("play") & filters.group)
-async def play_handler(_, m):
+async def play_handler(_, m: Message):
     chat_id = m.chat.id
-    query = " ".join(m.command[1:])
+    query = " ".join(m.command[1:])  # This gets the song name or URL from the command
+
     if not query:
         return await m.reply("⚠️ Please provide a song name or URL.")
 
     msg = await m.reply("🔍 Fetching...")
 
+    # Add the query to the queue
     if chat_id not in queues:
         queues[chat_id] = deque()
 
     queues[chat_id].append(query)
 
+    # If it's the first song, start playing it
     if len(queues[chat_id]) == 1:
         await play(bot, call, chat_id, query)
         await msg.edit(f"🎧 Now playing: **{query}**")
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
+
+
 
 from pyrogram import filters
 @bot.on_message(filters.command("skip") & filters.group)
