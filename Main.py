@@ -83,7 +83,7 @@ async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
         queues[chat_id] = deque()
         caption = f"🎵 <b>{song['title']}</b>\n👤 <i>{song['artists']}</i>\n🕒 <code>{song['duration']}</code>\n🔗 <a href='{song['video_url']}'>YouTube</a>"
-    await bot.reply_photo(
+    await bot.send_photo(
         photo=song["thumbnail"],
         caption=caption,
         parse_mode="html"
