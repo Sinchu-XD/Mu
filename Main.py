@@ -35,6 +35,7 @@ YDL_OPTS = {
     "no_warnings": True,
     "nocheckcertificate": True,
     "source_address": "0.0.0.0",
+    "default_search": "ytsearch",
     "forceipv4": True,
     "cachedir": False,
     "cookiefile": "cookies/cookies.txt",
@@ -46,6 +47,9 @@ async def get_stream_url(query: str):
     if query in cached_urls:
         return cached_urls[query]
 
+    if not query.startswith("http"):
+        query = f"ytsearch1:{query}"
+
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(
         None, lambda: YoutubeDL(YDL_OPTS).extract_info(query, download=False)
@@ -54,6 +58,7 @@ async def get_stream_url(query: str):
     url = data["url"]
     cached_urls[query] = url
     return url
+
 
 
 async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
