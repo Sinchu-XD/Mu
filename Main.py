@@ -111,6 +111,7 @@ async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
 # Command to play a song
+from pyrogram import Client, filters
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
@@ -132,6 +133,7 @@ async def play_handler(_, m: Message):
         await msg.edit(f"✅ Added to queue: **{query}**")
 
 # Command to skip a song
+from pyrogram import Client, filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
@@ -149,6 +151,7 @@ async def skip_handler(_, m: Message):
         await m.reply("❌ No song in queue.")
 
 # Command to show the queue
+from pyrogram import Client, filters
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m: Message):
     chat_id = m.chat.id
