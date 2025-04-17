@@ -44,18 +44,22 @@ async def get_stream_url(query: str):
     if query in cached_urls:
         return cached_urls[query]
 
-    # Step 1: FAST search using ytmusicapi
     search_results = ytmusic.search(query, filter="songs")
     if not search_results:
         raise Exception("Song not found!")
 
-    video_id = search_results[0].get("videoId")
+    result = search_results[0]
+    video_id = result.get("videoId")
     if not video_id:
         raise Exception("Invalid video ID!")
 
+    title = result.get("title")
+    duration = result.get("duration")
+    artists = ", ".join([a["name"] for a in result.get("artists", [])])
+    thumbnail = result["thumbnails"][-1]["url"]
     url = f"https://www.youtube.com/watch?v={video_id}"
 
-    # Step 2: Use yt-dlp to extract direct audio stream
+    # Get stream URL via yt-dlp
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(
         None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False)
@@ -66,11 +70,24 @@ async def get_stream_url(query: str):
         raise Exception("No stream URL found!")
 
     cached_urls[query] = stream_url
-    return stream_url
+    return {
+        "stream_url": stream_url,
+        "title": title,
+        "duration": duration,
+        "artists": artists,
+        "thumbnail": thumbnail,
+        "video_url": url,
+    }
 
 async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
     if chat_id not in queues:
         queues[chat_id] = deque()
+        caption = f"🎵 <b>{song['title']}</b>\n👤 <i>{song['artists']}</i>\n🕒 <code>{song['duration']}</code>\n🔗 <a href='{song['video_url']}'>YouTube</a>"
+    await message.reply_photo(
+        photo=song["thumbnail"],
+        caption=caption,
+        parse_mode="html"
+    )
 
     stream_url = await get_stream_url(query)
     media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
