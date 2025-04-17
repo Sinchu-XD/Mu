@@ -69,8 +69,7 @@ async def play(app: Client, call: PyTgCalls, chat_id: int, query: str):
         )
 
     return True, None
-except Exception as e:
-    return False, f"Error: <code>{e}</code>"
+
 
 @bot.on_message(filters.command("play") & filters.group)
 sync def play_handler(_, m):
