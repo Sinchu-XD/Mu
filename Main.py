@@ -29,7 +29,7 @@ if not os.path.exists(TEMP_AUDIO_DIR):
 
 
 
-# OptimiYDL_OPTS = {
+YDL_OPTS = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
     "quiet": True,
     "no_warnings": True,
