@@ -1,15 +1,10 @@
-import os
 import asyncio
+from collections import deque
 from pyrogram import Client, filters
-from pyrogram.types import Message
 from pytgcalls import PyTgCalls
-from pytgcalls.types import MediaStream, Update
-from pytgcalls.types import AudioQuality
+from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic
-from random import shuffle
-from collections import deque
-import time
 
 API_ID = 6067591
 API_HASH = "94e17044c2393f43fda31d3afe77b26b"
@@ -21,10 +16,8 @@ assistant = Client("Assistant", api_id=API_ID, api_hash=API_HASH, session_string
 call = PyTgCalls(assistant)
 
 queues = {}
-cache = {}
-fetch_lock = asyncio.Semaphore(3)
+cached_urls = {}
 ytmusic = YTMusic()
-
 
 YDL_OPTS = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
@@ -37,8 +30,6 @@ YDL_OPTS = {
     "cachedir": False,
     "cookiefile": "cookies/cookies.txt",
 }
-
-cached_urls = {}
 
 async def get_stream_url(query: str):
     if query in cached_urls:
@@ -53,18 +44,9 @@ async def get_stream_url(query: str):
     if not video_id:
         raise Exception("Invalid video ID!")
 
-    title = result.get("title")
-    duration = result.get("duration")
-    artists = ", ".join([a["name"] for a in result.get("artists", [])])
-    thumbnail = result["thumbnails"][-1]["url"]
     url = f"https://www.youtube.com/watch?v={video_id}"
-
-    # Get stream URL via yt-dlp
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False)
-    )
-
+    data = await loop.run_in_executor(None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False))
     stream_url = data.get("url")
     if not stream_url:
         raise Exception("No stream URL found!")
@@ -72,101 +54,67 @@ async def get_stream_url(query: str):
     cached_urls[query] = stream_url
     return {
         "stream_url": stream_url,
-        "title": title,
-        "duration": duration,
-        "artists": artists,
-        "thumbnail": thumbnail,
+        "title": result.get("title"),
+        "duration": result.get("duration"),
+        "artists": ", ".join([a["name"] for a in result.get("artists", [])]),
+        "thumbnail": result["thumbnails"][-1]["url"],
         "video_url": url,
     }
 
-async def play(bot: Client, call: PyTgCalls, chat_id: int, query: str):
-    # This function assumes that `query` is the name or URL of the song you want to play
-    if chat_id not in queues:
-        queues[chat_id] = deque()
-
-    # Get the stream URL for the song
+async def play_song(bot: Client, chat_id: int, query: str):
     song_info = await get_stream_url(query)
-
-    # Construct the song details message
     caption = f"🎵 <b>{song_info['title']}</b>\n👤 <i>{song_info['artists']}</i>\n🕒 <code>{song_info['duration']}</code>\n🔗 <a href='{song_info['video_url']}'>YouTube</a>"
 
-    # Send song details as a photo with the caption
-    await bot.send_photo(
-        chat_id=chat_id,
-        photo=song_info["thumbnail"],
-        caption=caption
-    )
-
-    # Play the song in the voice chat
+    await bot.send_photo(chat_id=chat_id, photo=song_info["thumbnail"], caption=caption)
     media_stream = MediaStream(song_info['stream_url'], audio_parameters=AudioQuality.HIGH)
     await call.play(chat_id, media_stream)
 
-    # Add song to the queue and return
-    queues[chat_id].append(query)
-    return True
-    
-from pytgcalls import filters
-@call.on_update(filters.stream_end())
-async def handler(client: PyTgCalls, update: Update):
+    queues.setdefault(chat_id, deque()).append(query)
+
+async def handle_queue_end(client: PyTgCalls, update: Update):
     chat_id = update.chat_id
-    # Check if there's a queue for the current chat
     if chat_id in queues:
-        # Remove the song that has ended from the queue
         queues[chat_id].popleft()
-        
-        # If there are still songs in the queue, play the next one
         if queues[chat_id]:
             next_song = queues[chat_id][0]
-            stream_url = await get_stream_url(next_song)
-            media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
-
-            # Play the next song
-            await call.play(chat_id, media_stream)
+            await play_song(client, chat_id, next_song)
             await client.send_message(chat_id, f"⏭️ Skipped to the next song: **{next_song}**")
         else:
-            # If there are no songs left in the queue, leave the voice chat
             await call.leave_call(chat_id)
             await client.send_message(chat_id, "✅ Queue ended. Left VC.")
     else:
-        # If no queue exists for the current chat, leave the voice chat
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
 
-from pyrogram import filters
+@call.on_update(filters.stream_end())
+async def stream_end_handler(client: PyTgCalls, update: Update):
+    await handle_queue_end(client, update)
+
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
-    query = " ".join(m.command[1:])  # This gets the song name or URL from the command
+    query = " ".join(m.command[1:])
 
     if not query:
         return await m.reply("⚠️ Please provide a song name or URL.")
 
     msg = await m.reply("🔍 Fetching...")
+    queues.setdefault(chat_id, deque()).append(query)
 
-    # Add the query to the queue
-    if chat_id not in queues:
-        queues[chat_id] = deque()
-
-    queues[chat_id].append(query)
-
-    # If it's the first song, start playing it
     if len(queues[chat_id]) == 1:
-        await play(bot, call, chat_id, query)
+        await play_song(bot, chat_id, query)
         await msg.edit(f"🎧 Now playing: **{query}**")
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
-
-
-from pyrogram import filters
 @bot.on_message(filters.command("skip") & filters.group)
-async def skip_handler(_, m):
+async def skip_handler(_, m: Message):
     chat_id = m.chat.id
     if chat_id in queues and queues[chat_id]:
         queues[chat_id].popleft()
         if queues[chat_id]:
             next_song = queues[chat_id][0]
-            await play(bot, call, chat_id, next_song)
+            await play_song(bot, chat_id, next_song)
             await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
         else:
             await call.leave_call(chat_id)
@@ -174,19 +122,15 @@ async def skip_handler(_, m):
     else:
         await m.reply("❌ No song in queue.")
 
-from pyrogram import filters
 @bot.on_message(filters.command("queue") & filters.group)
-async def queue_handler(_, m):
+async def queue_handler(_, m: Message):
     chat_id = m.chat.id
     if chat_id in queues and queues[chat_id]:
-        text = "**🎶 Current Queue:**\n"
-        for i, q in enumerate(queues[chat_id], 1):
-            text += f"{i}. {q}\n"
+        text = "**🎶 Current Queue:**\n" + "\n".join([f"{i+1}. {q}" for i, q in enumerate(queues[chat_id])])
         await m.reply(text)
     else:
         await m.reply("📭 Queue is empty.")
 
-# Main bot loop
 async def main():
     await bot.start()
     await assistant.start()
@@ -200,4 +144,3 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         print("Bot stopped manually.")
-        
