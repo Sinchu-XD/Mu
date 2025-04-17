@@ -27,42 +27,35 @@ TEMP_AUDIO_DIR = "temp_audio"
 if not os.path.exists(TEMP_AUDIO_DIR):
     os.makedirs(TEMP_AUDIO_DIR)
 
-YDL_OPTS = {
-    'format': 'bestaudio/best',
-    'quiet': True,
-    'no_warnings': True,
-    'nocheckcertificate': True,
-    'source_address': '0.0.0.0',
-    'default_search': 'ytsearch',
-    'cookiefile': "cookies/cookies.txt",
-}
 
+
+# OptimiYDL_OPTS = {
+    "format": "bestaudio[ext=m4a]/bestaudio/best",
+    "quiet": True,
+    "no_warnings": True,
+    "nocheckcertificate": True,
+    "source_address": "0.0.0.0",
+    "forceipv4": True,
+    "cachedir": False,
+    "cookiefile": "cookies/cookies.txt",
+}
 
 cached_urls = {}
 
-# Function to get the media stream URL using yt-dlp
-async def get_media_stream_url(query: str):
-    # Check cache to avoid re-fetching URLs
+async def get_stream_url(query: str):
     if query in cached_urls:
         return cached_urls[query]
 
     loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(
+        None, lambda: YoutubeDL(YDL_OPTS).extract_info(query, download=False)
+    )
 
-    def fetch_url():
-        with YoutubeDL(YDL_OPTS) as ydl:
-            info = ydl.extract_info(query, download=False)
-            if 'entries' in info:
-                info = info['entries'][0]
-            return info['url']
-
-    url = await loop.run_in_executor(None, fetch_url)
-
-    # Cache the URL for later use
+    url = data["url"]
     cached_urls[query] = url
-
     return url
 
-# Optimized play function
+
 async def play(chat_id, query):
     try:
         stream_url = await get_media_stream_url(query)
