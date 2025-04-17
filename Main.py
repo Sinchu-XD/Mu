@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 from pyrogram import Client, filters
+import pytgcalls
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
@@ -86,7 +87,7 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
 
-@call.on_update(filters.stream_end())
+@call.on_update(pytgcalls.filters.stream_end())
 async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
