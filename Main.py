@@ -7,7 +7,7 @@ from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic
 
-# Define your API keys and tokens
+
 API_ID = 6067591
 API_HASH = "94e17044c2393f43fda31d3afe77b26b"
 BOT_TOKEN = "7913409153:AAEvv86Q96KqjU6-fvj_JOBKp4_MHH9H4Wk"
