@@ -66,42 +66,27 @@ async def get_stream_url(query: str):
         if isinstance(data, dict) and "url" in data:
             stream_url = data["url"]
             cached_urls[query] = stream_url
-            return {
-                "stream_url": stream_url,
-                "title": result["title"],
-                "duration": result["duration"],
-                "artists": ", ".join([a["name"] for a in result["artists"]]),
-                "thumbnail": result["thumbnails"][-1]["url"],
-                "video_url": url,
-            }
+            return stream_url
         else:
             raise Exception(f"Failed to extract stream URL for {query}. Data: {data}")
     except Exception as e:
         raise Exception(f"Error extracting stream URL for {query}: {str(e)}")
 
-# Function to play a song
-async def play_song(bot: Client, chat_id: int, query: str):
+# Function to play a song (No message sending here)
+async def play_song(chat_id: int, query: str):
     try:
-        song_info = await get_stream_url(query)
+        stream_url = await get_stream_url(query)
 
-        # Ensure song_info is a dictionary before proceeding
-        if isinstance(song_info, dict):
-            caption = f"🎵 <b>{song_info['title']}</b>\n👤 <i>{song_info['artists']}</i>\n🕒 <code>{song_info['duration']}</code>\n🔗 <a href='{song_info['video_url']}'>YouTube</a>"
+        # Create media stream and play the song
+        media_stream = MediaStream(stream_url, audio_parameters=AudioQuality.HIGH)
+        await call.play(chat_id, media_stream)
 
-            # Send song thumbnail and caption
-            await bot.send_photo(chat_id=chat_id, photo=song_info["thumbnail"], caption=caption)
+        # Add song to the queue
+        queues.setdefault(chat_id, deque()).append(query)
 
-            # Create media stream and play the song
-            media_stream = MediaStream(song_info['stream_url'], audio_parameters=AudioQuality.HIGH)
-            await call.play(chat_id, media_stream)
-
-            # Add song to the queue
-            queues.setdefault(chat_id, deque()).append(query)
-        else:
-            raise Exception("Error: get_stream_url did not return valid data.")
     except Exception as e:
-        # If any error occurs, send a message to the chat
-        await bot.send_message(chat_id, f"❌ Error: {str(e)}")
+        # If any error occurs, log it
+        print(f"Error: {str(e)}")
 
 # Function to handle the queue end event (when the song finishes)
 async def handle_queue_end(client: PyTgCalls, update: Update):
@@ -110,7 +95,7 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
         queues[chat_id].popleft()
         if queues[chat_id]:
             next_song = queues[chat_id][0]
-            await play_song(client, chat_id, next_song)
+            await play_song(chat_id, next_song)
             await client.send_message(chat_id, f"⏭️ Skipped to the next song: **{next_song}**")
         else:
             await call.leave_call(chat_id)
@@ -118,7 +103,7 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
     else:
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
-        
+
 # Listen to stream end event from pytgcalls
 from pytgcalls import filters
 @call.on_update(filters.stream_end())
@@ -126,7 +111,6 @@ async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
 # Command to play a song
-from pyrogram import Client, filters
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
@@ -135,17 +119,19 @@ async def play_handler(_, m: Message):
     if not query:
         return await m.reply("⚠️ Please provide a song name or URL.")
 
-    msg = await m.reply("🔍 Fetching...")
+    # Add the song to the queue first
     queues.setdefault(chat_id, deque()).append(query)
 
+    msg = await m.reply("🔍 Fetching...")
+
+    # Check if it's the first song in the queue
     if len(queues[chat_id]) == 1:
-        await play_song(bot, chat_id, query)
+        await play_song(chat_id, query)
         await msg.edit(f"🎧 Now playing: **{query}**")
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
 # Command to skip a song
-from pyrogram import Client, filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
@@ -157,13 +143,12 @@ async def skip_handler(_, m: Message):
             queues[chat_id].popleft()
             if queues[chat_id]:
                 next_song = queues[chat_id][0]
-                await play_song(bot, chat_id, next_song)
+                await play_song(chat_id, next_song)
                 await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
     else:
         await m.reply("❌ No song in queue.")
 
 # Command to show the queue
-from pyrogram import Client, filters
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m: Message):
     chat_id = m.chat.id
