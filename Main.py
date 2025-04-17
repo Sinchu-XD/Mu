@@ -126,7 +126,7 @@ async def handler(client: PyTgCalls, update: Update):
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
 
-
+from pyrogram import filters
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m):
     chat_id = m.chat.id
@@ -147,6 +147,7 @@ async def play_handler(_, m):
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
+from pyrogram import filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m):
     chat_id = m.chat.id
@@ -162,6 +163,7 @@ async def skip_handler(_, m):
     else:
         await m.reply("❌ No song in queue.")
 
+from pyrogram import filters
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m):
     chat_id = m.chat.id
