@@ -137,12 +137,18 @@ from pyrogram import Client, filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
+    
+    # Check if the queue exists and has songs
     if chat_id in queues and queues[chat_id]:
-        if len(queues[chat_id]) == 1:  # If there's only one song left in the queue
+        # If there's only one song left in the queue
+        if len(queues[chat_id]) == 1:
             await call.leave_call(chat_id)
             await m.reply("✅ Queue ended. Left VC.")
         else:
-            queues[chat_id].popleft()  # Remove the current song from the queue
+            # Remove the current song from the queue (the song is now skipped)
+            queues[chat_id].popleft()
+            
+            # Check if there's a next song in the queue
             if queues[chat_id]:
                 next_song = queues[chat_id][0]
                 await play_song(chat_id, next_song)
