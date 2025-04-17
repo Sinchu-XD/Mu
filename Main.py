@@ -55,6 +55,10 @@ async def get_stream_url(query: str):
         None, lambda: YoutubeDL(YDL_OPTS).extract_info(query, download=False)
     )
 
+    # ✅ Check if search result has entries (ytsearch returns a playlist)
+    if "entries" in data:
+        data = data["entries"][0]
+
     url = data["url"]
     cached_urls[query] = url
     return url
