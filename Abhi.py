@@ -9,7 +9,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 API_ID = 6067591  # Your API ID
 API_HASH = "94e17044c2393f43fda31d3afe77b26b"  # Your API Hash
 BOT_TOKEN = "7913409153:AAEvv86Q96KqjU6-fvj_JOBKp4_MHH9H4Wk"  # Your Bot Token
-SESSION_STRING = "BQBclYcAfwPhsOaYEN9rZiJTeqV1e-mW90J3pxU5lU-HRDBDir4n236Uy6xowZLnSJ83DDyV-7m8NommEpFKXVZMwRR41bXxvE8JzhIcLIJnCP5yObgE3yRkljsE36qEsdVYTgggdMSHrhoFWZG5YuOIJ0hi1HpqzOJhocARqoVbys1-CNSjTAEXdNB3knhatAqkHVnHfWcgvtshc3iiru3Gjpl9lXaPnLL5p5GP11dL8vRS4Dob-8nZW2vEkXqsD4-Ce6BAD8m4RIqTsomtrQCgaH4ugYfpFuKVr_oz04hUTjB4MzXK-Wr_Fz5Lk42PnrE3wWEwhsfgOVu8AM02YlKLV77MegAAAAHKUdR6AA"  # Session String for Assistant
+SESSION_STRING = "BQBclYcAfwPhsOaYEN9rZiJTeqV1e-mW90J3pxU5lU-HRDBDir4n236Uy6xowZLnSJ83DDyV-7m8NommEpFKXVZMwRR41bXxvE8JzhIcLIJnCP5yObgE3yRkljsE36qEsdVYTgggdMSHrhoFWZG5YuOIJ0hi1HpqzOJhocARqoVbys1-CNSjTAEXdNB3knhatAqkHVnHfWcgvtshc3iiru3Gjpl9lXaPnLL5p5GP11dL8vRS4Dob-8nZW2vEkXqsD4-Ce6BAD8m4RIqTsomtrQCgaH4ugYfpFuKVr_oz04hUTjB4MzXK-Wr_Fz5p5M4E7h57sngjXqdo_YU1wMWjsd4fgEA7xhV41l8YlF5pFd3SffMB4uX_kdI_TUkHJZfztKsb3Zltyeq5pSQ_pF0E4_bZZp-Vg9WbYkFTlQjy0OrK3Q=="  # Session String for Assistant
 
 # Initialize bot and assistant clients
 bot = Client("MusicBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -21,6 +21,7 @@ ytmusic = YTMusic()
 
 # Store user-specific data (e.g., song requests) in a dictionary
 user_data = {}
+queue = []  # Global queue for songs
 
 # Function to search YouTube Music and get best audio stream URL along with metadata
 async def get_audio_url(query: str):
@@ -56,6 +57,37 @@ def add_user_to_data(user_id: int, song_title: str):
         user_data[user_id] = {"songs_requested": []}
     user_data[user_id]["songs_requested"].append(song_title)
 
+# Add song to the global queue
+def add_to_queue(song_info):
+    queue.append(song_info)
+
+# Play the next song from the queue
+async def play_next():
+    if queue:
+        song_info = queue.pop(0)
+        audio_url = song_info["url"]
+        song_title = song_info["title"]
+        song_duration = song_info["duration"]
+        song_uploader = song_info["uploader"]
+        song_thumbnail = song_info["thumbnail"]
+
+        # Formatting the song duration (in seconds)
+        minutes = song_duration // 60
+        seconds = song_duration % 60
+        formatted_duration = f"{minutes:02}:{seconds:02}"
+
+        # Play the song using `call.play()`
+        media_stream = MediaStream(
+            audio_url,
+            audio_parameters=AudioQuality.HIGH
+        )
+        # Assuming chat_id is available in the scope
+        await call.play(chat_id, media_stream)
+
+        # Optionally send thumbnail
+        await bot.send_photo(chat_id, song_thumbnail, caption=f"Now Playing: {song_title} - {song_uploader}")
+
+# Command handler for /play
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, message):
     chat_id = message.chat.id
@@ -88,8 +120,13 @@ async def play_handler(_, message):
         requested_by = message.from_user.mention
         user_id = message.from_user.id
 
-        # Add song to user's requested songs
+        # Add song to user's requested songs and the global queue
         add_user_to_data(user_id, song_title)
+        add_to_queue(song_info)
+
+        # If no song is playing, start playing the current one
+        if not queue:
+            await play_next()
 
         await msg.edit(
             f"🎧 **Now Streaming**:\n"
@@ -100,20 +137,10 @@ async def play_handler(_, message):
             f"[Listen Now]({audio_url})"
         )
 
-        # Play the song using `call.play()`
-        media_stream = MediaStream(
-            audio_url,
-            audio_parameters=AudioQuality.HIGH
-        )
-        await call.play(chat_id, media_stream)
-
-        # Optionally send thumbnail
-        await bot.send_photo(chat_id, song_thumbnail, caption="Now Playing!")
-
     except Exception as e:
         await msg.edit(f"❌ Error:\n`{e}`")
 
-
+# Command handler for /stop
 @bot.on_message(filters.command("stop") & filters.group)
 async def stop_handler(_, message):
     chat_id = message.chat.id
@@ -125,7 +152,7 @@ async def stop_handler(_, message):
     except Exception as e:
         await message.reply(f"❌ Error:\n`{e}`")
 
-
+# Command handler for /nowplaying
 @bot.on_message(filters.command("nowplaying") & filters.group)
 async def now_playing_handler(_, message):
     chat_id = message.chat.id
@@ -149,7 +176,7 @@ async def now_playing_handler(_, message):
         f"Use `/stop` to stop the stream."
     )
 
-
+# Command handler for /queue
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, message):
     user_id = message.from_user.id
@@ -159,7 +186,7 @@ async def queue_handler(_, message):
     queue_list = "\n".join([f"{i+1}. {song}" for i, song in enumerate(user_data[user_id]["songs_requested"])])
     await message.reply(f"🔹 **Your Requested Songs Queue**:\n{queue_list}")
 
-
+# Command handler for /help
 @bot.on_message(filters.command("help") & filters.group)
 async def help_handler(_, message):
     help_text = (
@@ -172,7 +199,6 @@ async def help_handler(_, message):
     )
     await message.reply(help_text)
 
-
 async def main():
     await bot.start()
     await assistant.start()
@@ -181,8 +207,7 @@ async def main():
     await idle()  # Keeps the program running
     await bot.stop()
 
-
 if __name__ == "__main__":
     import asyncio
     asyncio.get_event_loop().run_until_complete(main())
-  
+    
