@@ -1,7 +1,6 @@
 import asyncio
 from collections import deque
 from pyrogram import Client, filters
-import pytgcalls
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream, AudioQuality, Update
 from yt_dlp import YoutubeDL
@@ -86,11 +85,13 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
     else:
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
-
+        
+from pytgcalls import filters
 @call.on_update(pytgcalls.filters.stream_end())
 async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
+from pyrogram import filters
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
@@ -108,6 +109,8 @@ async def play_handler(_, m: Message):
     else:
         await msg.edit(f"✅ Added to queue: **{query}**")
 
+
+from pyrogram import filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
@@ -123,6 +126,7 @@ async def skip_handler(_, m: Message):
     else:
         await m.reply("❌ No song in queue.")
 
+from pyrogram import filters
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m: Message):
     chat_id = m.chat.id
