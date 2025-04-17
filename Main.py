@@ -46,33 +46,38 @@ async def get_stream_url(query: str):
         return cached_urls[query]
 
     # Perform the search for the song using YTMusic API
+    print(f"Searching for {query} on YTMusic...")
     search_results = ytmusic.search(query, filter="songs")
     if not search_results:
-        raise Exception("Song not found!")
+        raise Exception(f"Song '{query}' not found in YTMusic search!")
 
     result = search_results[0]
     video_id = result.get("videoId")
     if not video_id:
-        raise Exception("Invalid video ID!")
+        raise Exception(f"Invalid video ID for song: {query}")
 
     url = f"https://www.youtube.com/watch?v={video_id}"
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False))
+    print(f"Found video URL: {url}")
 
-    # Ensure that the extracted data contains the stream URL
-    if isinstance(data, dict) and "url" in data:
-        stream_url = data.get("url")
-        cached_urls[query] = stream_url
-        return {
-            "stream_url": stream_url,
-            "title": result.get("title"),
-            "duration": result.get("duration"),
-            "artists": ", ".join([a["name"] for a in result.get("artists", [])]),
-            "thumbnail": result["thumbnails"][-1]["url"],
-            "video_url": url,
-        }
-    else:
-        raise Exception("No stream URL found!")
+    # Extract stream info using yt-dlp
+    loop = asyncio.get_event_loop()
+    try:
+        data = await loop.run_in_executor(None, lambda: YoutubeDL(YDL_OPTS).extract_info(url, download=False))
+        if isinstance(data, dict) and "url" in data:
+            stream_url = data["url"]
+            cached_urls[query] = stream_url
+            return {
+                "stream_url": stream_url,
+                "title": result["title"],
+                "duration": result["duration"],
+                "artists": ", ".join([a["name"] for a in result["artists"]]),
+                "thumbnail": result["thumbnails"][-1]["url"],
+                "video_url": url,
+            }
+        else:
+            raise Exception(f"Failed to extract stream URL for {query}. Data: {data}")
+    except Exception as e:
+        raise Exception(f"Error extracting stream URL for {query}: {str(e)}")
 
 # Function to play a song
 async def play_song(bot: Client, chat_id: int, query: str):
@@ -114,13 +119,12 @@ async def handle_queue_end(client: PyTgCalls, update: Update):
         await call.leave_call(chat_id)
         await client.send_message(chat_id, "✅ Queue ended. Left VC.")
         
-from pytgcalls import filters
+# Listen to stream end event from pytgcalls
 @call.on_update(filters.stream_end())
 async def stream_end_handler(client: PyTgCalls, update: Update):
     await handle_queue_end(client, update)
 
 # Command to play a song
-from pyrogram import filters
 @bot.on_message(filters.command("play") & filters.group)
 async def play_handler(_, m: Message):
     chat_id = m.chat.id
@@ -139,24 +143,23 @@ async def play_handler(_, m: Message):
         await msg.edit(f"✅ Added to queue: **{query}**")
 
 # Command to skip a song
-from pyrogram import filters
 @bot.on_message(filters.command("skip") & filters.group)
 async def skip_handler(_, m: Message):
     chat_id = m.chat.id
     if chat_id in queues and queues[chat_id]:
-        queues[chat_id].popleft()
-        if queues[chat_id]:
-            next_song = queues[chat_id][0]
-            await play_song(bot, chat_id, next_song)
-            await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
-        else:
+        if len(queues[chat_id]) == 1:  # If there's only one song left in the queue
             await call.leave_call(chat_id)
             await m.reply("✅ Queue ended. Left VC.")
+        else:
+            queues[chat_id].popleft()
+            if queues[chat_id]:
+                next_song = queues[chat_id][0]
+                await play_song(bot, chat_id, next_song)
+                await m.reply(f"⏭️ Skipped. Now playing: **{next_song}**")
     else:
         await m.reply("❌ No song in queue.")
 
 # Command to show the queue
-from pyrogram import filters
 @bot.on_message(filters.command("queue") & filters.group)
 async def queue_handler(_, m: Message):
     chat_id = m.chat.id
